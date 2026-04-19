@@ -43,6 +43,22 @@ export default function CarForm() {
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
 
+  function convertToWebP(file, quality = 0.85) {
+    return new Promise(resolve => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        canvas.getContext('2d').drawImage(img, 0, 0)
+        canvas.toBlob(blob => resolve(blob ?? file), 'image/webp', quality)
+        URL.revokeObjectURL(img.src)
+      }
+      img.onerror = () => resolve(file)
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
@@ -70,10 +86,9 @@ export default function CarForm() {
     }
     const currentMax = existingPhotos.filter(p => !photosToDelete.find(d => d.id === p.id)).length
     for (let i = 0; i < newFiles.length; i++) {
-      const file = newFiles[i]
-      const ext = file.name.split('.').pop()
-      const path = `${carId}/${Date.now()}_${i}.${ext}`
-      const { data: uploaded } = await supabase.storage.from('car-photos').upload(path, file)
+      const webpBlob = await convertToWebP(newFiles[i])
+      const path = `${carId}/${Date.now()}_${i}.webp`
+      const { data: uploaded } = await supabase.storage.from('car-photos').upload(path, webpBlob, { contentType: 'image/webp' })
       if (uploaded) {
         const { data: { publicUrl } } = supabase.storage.from('car-photos').getPublicUrl(path)
         await supabase.from('car_photos').insert({ car_id: carId, photo_url: publicUrl, order: currentMax + i })
